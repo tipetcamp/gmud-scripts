@@ -1,0 +1,1 @@
+UPDATE centralpetcamp4.operadorpdv SET nome='Vitor Bonatooo Camargo' where cpf='52444537858';
