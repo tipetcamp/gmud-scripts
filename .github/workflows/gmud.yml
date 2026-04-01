@@ -1,0 +1,54 @@
+name: Executar GMUD SQL (MySQL)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'gmud-scripts/**/*.sql'
+
+jobs:
+  aplicar-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 # Necessário para o git diff identificar exatamente quais arquivos entraram no merge
+
+      - name: Instalar client do MySQL
+        run: sudo apt-get update && sudo apt-get install -y default-mysql-client
+
+      - name: Identificar e executar scripts novos
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASS: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+        run: |
+          # Identifica apenas os arquivos .sql que estão dentro da pasta gmud-scripts e que sofreram alteração/inclusão
+          FILES_MODIFIED=$(git diff --name-only HEAD^ HEAD | grep '^gmud-scripts/.*\.sql$' || true)
+          
+          if [ -z "$FILES_MODIFIED" ]; then
+            echo "Nenhum arquivo SQL novo para executar na pasta gmud-scripts."
+            exit 0
+          fi
+          
+          for FILE in $FILES_MODIFIED; do
+            echo "----------------------------------------"
+            echo "Executando o script: $FILE"
+            echo "----------------------------------------"
+            
+            # Comando que se conecta ao Windows Server e roda o arquivo SQL
+            # Nota: O -P maiúsculo é para a porta, e não há espaço entre -p minúsculo e a senha
+            mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" < "$FILE"
+            
+            # Se o banco retornar algum erro de sintaxe ou execução, a pipeline quebra (fica vermelha)
+            if [ $? -ne 0 ]; then
+              echo "Erro crítico ao executar o arquivo: $FILE"
+              exit 1
+            fi
+          done
+          
+          echo "Todos os scripts aplicados com sucesso na base $DB_NAME!"
